@@ -2,7 +2,7 @@
   "name": "Tally — Food Budget Ledger",
   "short_name": "Tally",
   "description": "Your personal food budget ledger. Scan food, check it against your goals, and see exactly how much room you have left this week.",
-  "start_url": ".",
+  "start_url": "https://themillsteam11-code.github.io/Workout/",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
