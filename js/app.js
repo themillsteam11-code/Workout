@@ -208,43 +208,52 @@
     reader.readAsDataURL(file);
   }
 
+  /* Gemini API key — set this to your free Google AI Studio key.
+   * Get one free at https://aistudio.google.com/apikey (no billing required).
+   * Gemini 2.0 Flash: 15 requests/min, 1 500 requests/day on the free tier.
+   */
+  var GEMINI_API_KEY = 'AQ.Ab8RN6LXYBx444-PzWvz7MZDKWWcyO7Kj6WyMssim8B9yX06qg';
+
   function triggerAIScan(dataUrl) {
     if (scanState.scanning) return;
     scanState.scanning = true;
     showScanStatus('Analysing image…');
 
     var base64Data = dataUrl.split(',')[1];
-    var mediaType  = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+    var mimeType   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
 
-    var systemPrompt = buildScanSystemPrompt();
+    var prompt = buildScanSystemPrompt();
 
-    fetch('https://api.anthropic.com/v1/messages', {
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
+
+    fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: [
+        contents: [{
+          parts: [
             {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64Data }
+              inline_data: { mime_type: mimeType, data: base64Data }
             },
             {
-              type: 'text',
-              text: 'Identify the food or drink in this image. Return ONLY a JSON object, no markdown, no commentary.'
+              text: prompt + '\n\nIdentify the food or drink in this image. Return ONLY a JSON object, no markdown, no commentary.'
             }
           ]
-        }]
+        }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          maxOutputTokens: 1000
+        }
       })
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       scanState.scanning = false;
       hideScanStatus();
-      var raw = (data.content || []).map(function (b) { return b.type === 'text' ? b.text : ''; }).join('');
+      var raw = '';
+      try {
+        raw = data.candidates[0].content.parts[0].text || '';
+      } catch (_) { raw = ''; }
       var clean = raw.replace(/```json|```/g, '').trim();
       try {
         var result = JSON.parse(clean);
@@ -276,7 +285,7 @@
       'The user\'s goal is: ' + goalLabel + '.',
       'Their diet philosophy is: ' + dietLabel + '.',
       '',
-      'When given a food image, identify the item and return ONLY a valid JSON object with these fields:',
+      'When given a food image, identify the item and return ONLY a valid JSON object with these fields (no markdown fences):',
       '  name       (string)  — concise human-readable name e.g. "Snickers Bar"',
       '  brand      (string)  — brand name or empty string',
       '  serving    (string)  — the serving size visible or typical e.g. "1 bar (50g)"',
