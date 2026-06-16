@@ -208,12 +208,6 @@
     reader.readAsDataURL(file);
   }
 
-  /* Gemini API key — set this to your free Google AI Studio key.
-   * Get one free at https://aistudio.google.com/apikey (no billing required).
-   * Gemini 2.0 Flash: 15 requests/min, 1 500 requests/day on the free tier.
-   */
-  var GEMINI_API_KEY = 'AQ.Ab8RN6LXYBx444-PzWvz7MZDKWWcyO7Kj6WyMssim8B9yX06qg';
-
   function triggerAIScan(dataUrl) {
     if (scanState.scanning) return;
     scanState.scanning = true;
@@ -224,9 +218,7 @@
 
     var prompt = buildScanSystemPrompt();
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_API_KEY;
-
-    fetch(url, {
+    fetch('https://tally-gemini.ammiller1151.workers.dev/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
