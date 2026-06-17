@@ -165,14 +165,29 @@
     img.src = obj;
   }
 
-  function triggerAIScan(dataUrl) {
-    if (scanState.scanning) return;
+  // Free vision models on OpenRouter — in priority order
+  var FREE_VISION_MODELS = [
+    'nvidia/nemotron-nano-12b-v2-vl:free',
+    'moonshotai/kimi-vl-a3b-thinking:free'
+  ];
+
+  function triggerAIScan(dataUrl, modelIndex) {
+    modelIndex = modelIndex || 0;
+    if (modelIndex >= FREE_VISION_MODELS.length) {
+      showScanStatus('All free AI models unavailable right now — use search below.');
+      setTimeout(hideScanStatus, 6000);
+      scanState.scanning = false;
+      return;
+    }
+    if (scanState.scanning && modelIndex === 0) return;
     scanState.scanning = true;
-    showScanStatus('Identifying food…');
+
+    var model = FREE_VISION_MODELS[modelIndex];
+    showScanStatus('Identifying food… (' + (modelIndex + 1) + '/' + FREE_VISION_MODELS.length + ')');
+
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
 
-    // OpenRouter — OpenAI-compatible, free vision models, auto-rotates across providers
     fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -182,7 +197,7 @@
         'X-Title': 'Tally Food Scanner'
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-maverick:free',
+        model: model,
         max_tokens: 600,
         temperature: 0.1,
         messages: [{
@@ -210,20 +225,29 @@
       try {
         var result = JSON.parse(clean);
         if (result && result.name) { handleScanResult(result); }
-        else { showScanStatus('Couldn\'t read food — try search below'); setTimeout(hideScanStatus, 3000); }
-      } catch (_) { showScanStatus('Couldn\'t parse result — try search below'); setTimeout(hideScanStatus, 3000); }
+        else { showScanStatus('Couldn\'t read food \u2014 try search below'); setTimeout(hideScanStatus, 3000); }
+      } catch (_) { showScanStatus('Couldn\'t parse result \u2014 try search below'); setTimeout(hideScanStatus, 3000); }
     })
     .catch(function (err) {
-      scanState.scanning = false;
       var msg = String(err.message || err).toLowerCase();
+
+      // Model unavailable / not free — try next model in list
+      if (msg.includes('404') || msg.includes('not found') || msg.includes('unavailable') || msg.includes('not available for free') || msg.includes('paid')) {
+        scanState.scanning = false;
+        triggerAIScan(dataUrl, modelIndex + 1);
+        return;
+      }
+
+      scanState.scanning = false;
+
       if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many')) {
-        showScanStatus('Rate limit — wait a few seconds then tap Take Photo again.');
+        showScanStatus('Rate limit \u2014 wait a few seconds then tap Take Photo again.');
         setTimeout(hideScanStatus, 6000);
       } else if (msg.includes('401') || msg.includes('403') || msg.includes('unauthorized') || msg.includes('invalid api key') || msg.includes('no api key')) {
         hideScanStatus();
-        showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl); });
+        showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl, 0); });
       } else if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
-        showScanStatus('No internet — use search below (works offline).');
+        showScanStatus('No internet \u2014 use search below (works offline).');
         setTimeout(hideScanStatus, 5000);
       } else {
         showScanStatus('Scan error: ' + String(err.message || err).slice(0, 80));
