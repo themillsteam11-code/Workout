@@ -1,6 +1,6 @@
 /* Tally — main application
  * Depends on: data.js, calc.js
- * AI scan  : Google Gemini 1.5 Flash (free tier, user's own key stored locally)
+ * AI scan  : OpenRouter (free vision models, user's own key stored locally)
  * Food DB  : Open Food Facts — 4M+ products, no API key needed
  */
 (function () {
@@ -8,7 +8,7 @@
 
   var STORAGE_KEY_PROFILE = 'tally_profile_v1';
   var STORAGE_KEY_LOGS    = 'tally_logs_v1';
-  var STORAGE_KEY_APIKEY  = 'tally_gemini_key_v1';
+  var STORAGE_KEY_APIKEY  = 'tally_openrouter_key_v1';
 
   function loadProfile() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY_PROFILE)) || null; } catch (_) { return null; } }
   function saveProfile(p) { localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(p)); }
@@ -17,7 +17,7 @@
   function loadApiKey() { try { return localStorage.getItem(STORAGE_KEY_APIKEY) || ''; } catch (_) { return ''; } }
   function saveApiKey(k) { localStorage.setItem(STORAGE_KEY_APIKEY, k.trim()); }
 
-  var state = { profile: null, logs: [], budgets: null, weekState: null, currentResult: null, geminiKey: '' };
+  var state = { profile: null, logs: [], budgets: null, weekState: null, currentResult: null, apiKey: '' };
 
   function recompute() {
     if (!state.profile) return;
@@ -28,7 +28,7 @@
   function init() {
     state.profile   = loadProfile();
     state.logs      = loadLogs();
-    state.geminiKey = loadApiKey();
+    state.apiKey    = loadApiKey();
     recompute();
     if (!state.profile) { showOnboarding(); } else { hideOnboarding(); navigate('home'); }
     renderTopbar();
@@ -105,12 +105,12 @@
     var err   = document.getElementById('apikey-error');
     var btn   = document.getElementById('apikey-save-btn');
     err.classList.add('hidden');
-    input.value = state.geminiKey || '';
+    input.value = state.apiKey || '';
 
     function trySave() {
       var key = input.value.trim();
-      if (!key || key.length < 20) { err.textContent = 'Doesn\'t look right — Gemini keys start with "AIza" and are ~39 chars.'; err.classList.remove('hidden'); return; }
-      saveApiKey(key); state.geminiKey = key;
+      if (!key || key.length < 20) { err.textContent = 'Doesn\'t look right — OpenRouter keys start with "sk-or-" and are much longer.'; err.classList.remove('hidden'); return; }
+      saveApiKey(key); state.apiKey = key;
       el.classList.add('hidden');
       if (typeof onSuccess === 'function') onSuccess();
     }
@@ -158,7 +158,7 @@
       var vf = document.getElementById('vf-image'), ph = document.getElementById('vf-placeholder');
       if (vf) { vf.src = dataUrl; vf.classList.remove('hidden'); }
       if (ph) ph.classList.add('hidden');
-      if (!state.geminiKey) { showApiKeyScreen(function () { triggerAIScan(dataUrl); }); }
+      if (!state.apiKey) { showApiKeyScreen(function () { triggerAIScan(dataUrl); }); }
       else { triggerAIScan(dataUrl); }
     };
     img.onerror = function () { URL.revokeObjectURL(obj); showScanStatus('Could not load image — try again'); setTimeout(hideScanStatus, 3000); };
@@ -168,64 +168,63 @@
   function triggerAIScan(dataUrl) {
     if (scanState.scanning) return;
     scanState.scanning = true;
-    showScanStatus('Identifying food\u2026');
+    showScanStatus('Identifying food…');
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + encodeURIComponent(state.geminiKey);
-    var prompt = buildGeminiPrompt();
-    fetch(url, {
+
+    // OpenRouter — OpenAI-compatible, free vision models, auto-rotates across providers
+    fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + state.apiKey,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Tally Food Scanner'
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ inline_data: { mime_type: mime, data: base64 } }, { text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 600 }
+        model: 'meta-llama/llama-4-maverick:free',
+        max_tokens: 600,
+        temperature: 0.1,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: 'data:' + mime + ';base64,' + base64 } },
+            { type: 'text', text: buildScanPrompt() }
+          ]
+        }]
       })
     })
     .then(function (r) {
       if (!r.ok) return r.json().then(function (b) {
         var detail = (b.error && b.error.message) || ('HTTP ' + r.status);
-        var code   = (b.error && b.error.code) || r.status;
-        throw new Error('CODE:' + code + ' ' + detail);
+        throw new Error('CODE:' + r.status + ' ' + detail);
       });
       return r.json();
     })
     .then(function (data) {
       scanState.scanning = false; hideScanStatus();
       var raw = '';
-      try { raw = data.candidates[0].content.parts[0].text || ''; } catch (_) {}
+      try { raw = data.choices[0].message.content || ''; } catch (_) {}
       var clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
       var match = clean.match(/\{[\s\S]*\}/); if (match) clean = match[0];
       try {
         var result = JSON.parse(clean);
         if (result && result.name) { handleScanResult(result); }
-        else { showScanStatus('Couldn\'t read food \u2014 try search below'); setTimeout(hideScanStatus, 3000); }
-      } catch (_) { showScanStatus('Couldn\'t parse result \u2014 try search below'); setTimeout(hideScanStatus, 3000); }
+        else { showScanStatus('Couldn\'t read food — try search below'); setTimeout(hideScanStatus, 3000); }
+      } catch (_) { showScanStatus('Couldn\'t parse result — try search below'); setTimeout(hideScanStatus, 3000); }
     })
     .catch(function (err) {
       scanState.scanning = false;
       var msg = String(err.message || err).toLowerCase();
-
-      // Quota / rate limit (429) — most common free tier issue
-      if (msg.includes('429') || msg.includes('quota') || msg.includes('rate') || msg.includes('exhausted') || msg.includes('resource_exhausted')) {
-        showScanStatus('Daily free quota reached \u2014 resets at midnight Pacific. Use search below for now.');
-        setTimeout(hideScanStatus, 8000);
-
-      // Bad / missing API key (400, 401, 403)
-      } else if (msg.includes('401') || msg.includes('403') || msg.includes('api key') || msg.includes('api_key') || msg.includes('invalid') && msg.includes('code:40')) {
+      if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many')) {
+        showScanStatus('Rate limit — wait a few seconds then tap Take Photo again.');
+        setTimeout(hideScanStatus, 6000);
+      } else if (msg.includes('401') || msg.includes('403') || msg.includes('unauthorized') || msg.includes('invalid api key') || msg.includes('no api key')) {
         hideScanStatus();
         showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl); });
-
-      // Model not found (404) — shouldn't happen with gemini-2.0-flash but just in case
-      } else if (msg.includes('404') || msg.includes('not found')) {
-        showScanStatus('Model not available \u2014 try search below or come back later.');
-        setTimeout(hideScanStatus, 6000);
-
-      // Network / offline
       } else if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
-        showScanStatus('No internet connection \u2014 use the search below (works offline).');
-        setTimeout(hideScanStatus, 6000);
-
-      // Anything else — show the raw message so it's debuggable
+        showScanStatus('No internet — use search below (works offline).');
+        setTimeout(hideScanStatus, 5000);
       } else {
         showScanStatus('Scan error: ' + String(err.message || err).slice(0, 80));
         setTimeout(hideScanStatus, 7000);
@@ -233,11 +232,12 @@
     });
   }
 
-  function buildGeminiPrompt() {
+  function buildScanPrompt() {
     var p = state.profile;
     var goal = p ? (TallyData.GOALS[p.goal] || {}).label || p.goal : 'general health';
-    return 'You are a nutrition expert. Analyse the food/drink in this image. User goal: ' + goal + '.\nReturn ONLY a single valid JSON object (no markdown, no text before or after) with these exact keys:\n{"name":"","brand":"","serving":"","kcal":0,"protein":0,"carbs":0,"fat":0,"satFat":0,"sugar":0,"fiber":0,"sodium":0,"processed":false,"category":"","swap":""}\nname=concise food name, brand=brand or "", serving=e.g."1 bar (50g)", kcal=calories(int), protein/carbs/fat/satFat/sugar/fiber=grams, sodium=mg, processed=true if ultra-processed, category=one of[snack drink fastfood meal protein dairy fruit veg grain bakery dessert spread dip], swap=one-sentence healthier swap or "".\nUse label values if readable. Otherwise use well-known standard values. Return ONLY the JSON.';
+    return 'You are a nutrition expert. Identify the food or drink in this image. User goal: ' + goal + '.\nReturn ONLY a single valid JSON object. No markdown, no explanation, no text before or after.\n{\"name\":\"\",\"brand\":\"\",\"serving\":\"\",\"kcal\":0,\"protein\":0,\"carbs\":0,\"fat\":0,\"satFat\":0,\"sugar\":0,\"fiber\":0,\"sodium\":0,\"processed\":false,\"category\":\"\",\"swap\":\"\"}\nname=food name, brand=brand or empty, serving=e.g.\"1 bar (50g)\", kcal=integer, protein/carbs/fat/satFat/sugar/fiber=grams, sodium=mg, processed=true if ultra-processed, category=one of[snack drink fastfood meal protein dairy fruit veg grain bakery dessert spread dip], swap=one sentence healthier swap or empty if already healthy.\nUse label values if visible. Otherwise use well-known standard values. Return ONLY the JSON.';
   }
+
 
   function handleScanResult(food) {
     ['kcal','protein','carbs','fat','satFat','sugar','fiber','sodium'].forEach(function (k) { food[k] = parseFloat(food[k]) || 0; });
@@ -481,7 +481,7 @@
     document.getElementById('settings-act-label').textContent  = actObj.label || p.activity;
     document.getElementById('settings-pace-label').textContent = (((goalObj.paces || {})[p.pace]) || {}).desc || p.pace;
     var ks = document.getElementById('apikey-status');
-    if (ks) { ks.textContent = state.geminiKey ? state.geminiKey.slice(0,8) + '\u2026' + state.geminiKey.slice(-4) + ' (tap to change)' : 'Not set \u2014 tap Scan to add your free key'; ks.style.color = state.geminiKey ? 'var(--moss)' : 'var(--brick)'; }
+    if (ks) { ks.textContent = state.apiKey ? state.apiKey.slice(0,8) + '\u2026' + state.apiKey.slice(-4) + ' (tap to change)' : 'Not set \u2014 tap Scan to add your free key'; ks.style.color = state.apiKey ? 'var(--moss)' : 'var(--brick)'; }
   }
 
   /* ---- ONBOARDING ---- */
