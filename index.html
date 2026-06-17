@@ -562,33 +562,32 @@
 
 <!-- API Key setup screen -->
 <div class="apikey-screen hidden" id="apikey-screen">
-  <div style="padding:max(var(--sp-6),env(safe-area-inset-top)) var(--sp-4) var(--sp-4)">
+      <div style="padding:max(var(--sp-6),env(safe-area-inset-top)) var(--sp-4) var(--sp-4)">
     <div class="brand-mark" style="margin-bottom:var(--sp-5)">TAL<span style="color:var(--wheat)">L</span>Y</div>
     <h1 style="font-size:22px;margin-bottom:var(--sp-2)">Add your free AI key</h1>
     <p style="font-size:13px;color:var(--ink-soft);line-height:1.6;margin-bottom:var(--sp-5)">
-      Tally uses Google Gemini to identify food from photos. It's completely free — no credit card, no subscription. You just need a free API key from Google, which takes about 60 seconds.
+      Tally uses OpenRouter to identify food from photos — it rotates across multiple free AI models so you never hit one model's quota. No credit card, no subscription. Takes 60 seconds to set up.
     </p>
 
     <div style="margin-bottom:var(--sp-5)">
       <div style="display:flex;gap:var(--sp-3);margin-bottom:var(--sp-3);align-items:flex-start">
         <div style="width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
-        <div style="font-size:13px;padding-top:3px;line-height:1.5">Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--wheat);text-decoration:underline">aistudio.google.com/app/apikey</a> (free Google account required)</div>
+        <div style="font-size:13px;padding-top:3px;line-height:1.5">Go to <a href="https://openrouter.ai/keys" target="_blank" style="color:var(--wheat);text-decoration:underline">openrouter.ai/keys</a> and sign up free (just email, no credit card)</div>
       </div>
       <div style="display:flex;gap:var(--sp-3);margin-bottom:var(--sp-3);align-items:flex-start">
         <div style="width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
-        <div style="font-size:13px;padding-top:3px;line-height:1.5">Click <strong>Create API key</strong> → Copy it</div>
+        <div style="font-size:13px;padding-top:3px;line-height:1.5">Click <strong>Create Key</strong> → give it any name → Copy the key (starts with <span style="font-family:var(--font-mono);font-size:12px">sk-or-</span>)</div>
       </div>
       <div style="display:flex;gap:var(--sp-3);align-items:flex-start">
         <div style="width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--paper);font-family:var(--font-mono);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
-        <div style="font-size:13px;padding-top:3px;line-height:1.5">Paste it below. It's stored <strong>only on this device</strong> — never uploaded anywhere.</div>
+        <div style="font-size:13px;padding-top:3px;line-height:1.5">Paste it below. Stored <strong>only on this device</strong> — never sent anywhere except OpenRouter.</div>
       </div>
     </div>
 
     <div style="background:var(--moss-bg);border-radius:var(--r-sm);padding:var(--sp-3);margin-bottom:var(--sp-4);display:flex;align-items:center;gap:var(--sp-2)">
       <span style="font-family:var(--font-mono);font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--moss)">FREE</span>
-      <span style="font-size:12px;color:var(--moss)">1,500 scans/day · 30 scans/min · No credit card · Resets at midnight Pacific</span>
+      <span style="font-size:12px;color:var(--moss)">No credit card &middot; Rotates free models automatically &middot; 200 req/day per model</span>
     </div>
-
     <div class="field">
       <label class="field-label" for="apikey-input">Your Gemini API key</label>
       <input type="text" id="apikey-input" placeholder="AIza…" autocomplete="off" autocorrect="off" spellcheck="false" style="font-size:14px;letter-spacing:0.04em">
