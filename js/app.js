@@ -171,7 +171,7 @@
     showScanStatus('Identifying food\u2026');
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + encodeURIComponent(state.geminiKey);
+    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(state.geminiKey);
     var prompt = buildGeminiPrompt();
     fetch(url, {
       method: 'POST',
@@ -207,7 +207,7 @@
         hideScanStatus();
         showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl); });
       } else if (msg.includes('not found') || msg.includes('404') || msg.includes('INVALID_ARGUMENT')) {
-        showScanStatus('Model error \u2014 tap Take Photo to retry'); setTimeout(hideScanStatus, 5000);
+        showScanStatus('API error: ' + msg.slice(0, 80)); setTimeout(hideScanStatus, 6000);
       } else {
         showScanStatus('Error: ' + msg.slice(0, 55) + ' \u2014 try search'); setTimeout(hideScanStatus, 5000);
       }
