@@ -171,7 +171,7 @@
     showScanStatus('Identifying food\u2026');
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + encodeURIComponent(state.geminiKey);
+    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=' + encodeURIComponent(state.geminiKey);
     var prompt = buildGeminiPrompt();
     fetch(url, {
       method: 'POST',
@@ -184,7 +184,8 @@
     .then(function (r) {
       if (!r.ok) return r.json().then(function (b) {
         var detail = (b.error && b.error.message) || ('HTTP ' + r.status);
-        throw new Error(detail);
+        var code   = (b.error && b.error.code) || r.status;
+        throw new Error('CODE:' + code + ' ' + detail);
       });
       return r.json();
     })
@@ -202,14 +203,32 @@
     })
     .catch(function (err) {
       scanState.scanning = false;
-      var msg = String(err.message || err);
-      if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401') || msg.includes('API key')) {
+      var msg = String(err.message || err).toLowerCase();
+
+      // Quota / rate limit (429) — most common free tier issue
+      if (msg.includes('429') || msg.includes('quota') || msg.includes('rate') || msg.includes('exhausted') || msg.includes('resource_exhausted')) {
+        showScanStatus('Daily free quota reached \u2014 resets at midnight Pacific. Use search below for now.');
+        setTimeout(hideScanStatus, 8000);
+
+      // Bad / missing API key (400, 401, 403)
+      } else if (msg.includes('401') || msg.includes('403') || msg.includes('api key') || msg.includes('api_key') || msg.includes('invalid') && msg.includes('code:40')) {
         hideScanStatus();
         showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl); });
-      } else if (msg.includes('not found') || msg.includes('404') || msg.includes('INVALID_ARGUMENT')) {
-        showScanStatus('API error: ' + msg.slice(0, 80)); setTimeout(hideScanStatus, 6000);
+
+      // Model not found (404) — shouldn't happen with gemini-2.0-flash but just in case
+      } else if (msg.includes('404') || msg.includes('not found')) {
+        showScanStatus('Model not available \u2014 try search below or come back later.');
+        setTimeout(hideScanStatus, 6000);
+
+      // Network / offline
+      } else if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
+        showScanStatus('No internet connection \u2014 use the search below (works offline).');
+        setTimeout(hideScanStatus, 6000);
+
+      // Anything else — show the raw message so it's debuggable
       } else {
-        showScanStatus('Error: ' + msg.slice(0, 55) + ' \u2014 try search'); setTimeout(hideScanStatus, 5000);
+        showScanStatus('Scan error: ' + String(err.message || err).slice(0, 80));
+        setTimeout(hideScanStatus, 7000);
       }
     });
   }
