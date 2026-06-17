@@ -37,7 +37,7 @@ self.addEventListener('fetch', function (e) {
   var url = e.request.url;
 
   /* Always hit the network for AI + food DB calls */
-  if (url.includes('generativelanguage.googleapis.com') ||
+  if (url.includes('openrouter.ai') ||
       url.includes('openfoodfacts.org') ||
       url.includes('fonts.googleapis.com') ||
       url.includes('fonts.gstatic.com')) {
