@@ -171,7 +171,7 @@
     showScanStatus('Identifying food\u2026');
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
-    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + encodeURIComponent(state.geminiKey);
+    var url    = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' + encodeURIComponent(state.geminiKey);
     var prompt = buildGeminiPrompt();
     fetch(url, {
       method: 'POST',
@@ -182,7 +182,10 @@
       })
     })
     .then(function (r) {
-      if (!r.ok) return r.json().then(function (b) { throw new Error((b.error && b.error.message) || 'HTTP ' + r.status); });
+      if (!r.ok) return r.json().then(function (b) {
+        var detail = (b.error && b.error.message) || ('HTTP ' + r.status);
+        throw new Error(detail);
+      });
       return r.json();
     })
     .then(function (data) {
@@ -200,9 +203,11 @@
     .catch(function (err) {
       scanState.scanning = false;
       var msg = String(err.message || err);
-      if (msg.includes('API_KEY') || msg.includes('key') || msg.includes('403') || msg.includes('401') || msg.includes('400')) {
+      if (msg.includes('API_KEY') || msg.includes('403') || msg.includes('401') || msg.includes('API key')) {
         hideScanStatus();
         showApiKeyScreen(function () { triggerAIScan(scanState.imageDataUrl); });
+      } else if (msg.includes('not found') || msg.includes('404') || msg.includes('INVALID_ARGUMENT')) {
+        showScanStatus('Model error \u2014 tap Take Photo to retry'); setTimeout(hideScanStatus, 5000);
       } else {
         showScanStatus('Error: ' + msg.slice(0, 55) + ' \u2014 try search'); setTimeout(hideScanStatus, 5000);
       }
