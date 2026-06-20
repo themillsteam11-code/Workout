@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F2F2F7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Tally">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Tally</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════
+     ONBOARDING
+     ════════════════════════════════════════════════════════════ -->
+<div class="onboarding hidden" id="onboarding">
+  <div class="ob-header">
+    <span class="ob-logo">Tally</span>
+  </div>
+  <div class="ob-progress">
+    <div class="ob-progress-dot"></div>
+    <div class="ob-progress-dot"></div>
+    <div class="ob-progress-dot"></div>
+    <div class="ob-progress-dot"></div>
+    <div class="ob-progress-dot"></div>
+  </div>
+
+  <div class="ob-body">
+    <div id="ob-error" class="ob-error"></div>
+
+    <!-- Step 1: Basics -->
+    <div class="ob-step" id="ob-basics">
+      <h1 class="ob-title">Let's get to know you</h1>
+      <p class="ob-sub">Everything stays on your device. Used only to calculate your personal calorie budget.</p>
+      <div class="field">
+        <label class="field-label" for="ob-name">First name</label>
+        <input type="text" id="ob-name" placeholder="Alex" autocomplete="given-name" inputmode="text">
+      </div>
+      <div class="field">
+        <label class="field-label" for="ob-age">Age</label>
+        <input type="number" id="ob-age" placeholder="28" min="10" max="120" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label class="field-label">Sex <span style="color:var(--label-3);font-weight:400;text-transform:none;letter-spacing:0">(for calorie calculations)</span></label>
+        <div class="option-row">
+          <label class="option-item selected">
+            <input type="radio" name="ob_sex" value="female" checked>
+            <div class="option-radio"></div>
+            <div class="option-body"><div class="option-title">Female</div></div>
+          </label>
+          <label class="option-item">
+            <input type="radio" name="ob_sex" value="male">
+            <div class="option-radio"></div>
+            <div class="option-body"><div class="option-title">Male</div></div>
+          </label>
+          <label class="option-item">
+            <input type="radio" name="ob_sex" value="other">
+            <div class="option-radio"></div>
+            <div class="option-body"><div class="option-title">Other</div></div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Body -->
+    <div class="ob-step" id="ob-body">
+      <h1 class="ob-title">Your body</h1>
+      <p class="ob-sub">Used to calculate calorie burn rates and your personalised budget.</p>
+      <div class="unit-seg" id="unit-seg">
+        <button class="active" data-units="metric">Metric</button>
+        <button data-units="imperial">Imperial</button>
+      </div>
+      <div id="metric-fields">
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="ob-weight-kg">Weight (kg)</label>
+            <input type="number" id="ob-weight-kg" placeholder="72" min="30" max="300" inputmode="decimal">
+          </div>
+          <div class="field">
+            <label class="field-label" for="ob-height-cm">Height (cm)</label>
+            <input type="number" id="ob-height-cm" placeholder="175" min="100" max="250" inputmode="decimal">
+          </div>
+        </div>
+      </div>
+      <div id="imperial-fields" class="hidden">
+        <div class="field">
+          <label class="field-label" for="ob-weight-lb">Weight (lbs)</label>
+          <input type="number" id="ob-weight-lb" placeholder="160" min="66" max="660" inputmode="decimal">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="ob-height-ft">Feet</label>
+            <input type="number" id="ob-height-ft" placeholder="5" min="3" max="8" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label class="field-label" for="ob-height-in">Inches</label>
+            <input type="number" id="ob-height-in" placeholder="9" min="0" max="11" inputmode="numeric">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3: Activity -->
+    <div class="ob-step" id="ob-activity">
+      <h1 class="ob-title">How active are you?</h1>
+      <p class="ob-sub">Be honest — overestimating is the #1 reason people stall.</p>
+      <div class="option-list">
+        <label class="option-item"><input type="radio" name="ob_activity" value="sedentary"><div class="option-radio"></div><div class="option-body"><div class="option-title">Sedentary</div><div class="option-desc">Desk job, little exercise</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_activity" value="light"><div class="option-radio"></div><div class="option-body"><div class="option-title">Lightly active</div><div class="option-desc">Exercise 1–3 days/week</div></div></label>
+        <label class="option-item selected"><input type="radio" name="ob_activity" value="moderate" checked><div class="option-radio"></div><div class="option-body"><div class="option-title">Moderately active</div><div class="option-desc">Exercise 3–5 days/week</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_activity" value="active"><div class="option-radio"></div><div class="option-body"><div class="option-title">Very active</div><div class="option-desc">Exercise 6–7 days/week</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_activity" value="athlete"><div class="option-radio"></div><div class="option-body"><div class="option-title">Athlete</div><div class="option-desc">Hard daily training or physical job</div></div></label>
+      </div>
+    </div>
+
+    <!-- Step 4: Goal -->
+    <div class="ob-step" id="ob-goal">
+      <h1 class="ob-title">What's the goal?</h1>
+      <p class="ob-sub">You're in control — pick what you actually want.</p>
+      <div class="option-list goal-group">
+        <label class="option-item selected"><input type="radio" name="ob_goal" value="lose" checked><div class="option-radio"></div><div class="option-body"><div class="option-title">Lose weight</div><div class="option-desc">Calorie deficit to reduce body fat</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_goal" value="maintain"><div class="option-radio"></div><div class="option-body"><div class="option-title">Maintain weight</div><div class="option-desc">Hold steady at current weight</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_goal" value="gain"><div class="option-radio"></div><div class="option-body"><div class="option-title">Build muscle</div><div class="option-desc">Calorie surplus to support growth</div></div></label>
+      </div>
+      <div id="ob-pace-section">
+        <p class="field-label" style="margin-bottom:var(--s2)">Pace</p>
+        <div class="option-list pace-group"></div>
+      </div>
+    </div>
+
+    <!-- Step 5: Diet style -->
+    <div class="ob-step" id="ob-diet">
+      <h1 class="ob-title">Diet style</h1>
+      <p class="ob-sub">This sets how much of your weekly budget is "flexible" — room for treats and real life.</p>
+      <div class="option-list">
+        <label class="option-item"><input type="radio" name="ob_diet" value="lazy"><div class="option-radio"></div><div class="option-body"><div class="option-title">Low effort</div><div class="option-desc">Small swaps only. 30% flexible budget.</div></div></label>
+        <label class="option-item selected"><input type="radio" name="ob_diet" value="balanced" checked><div class="option-radio"></div><div class="option-body"><div class="option-title">Balanced</div><div class="option-desc">Real meals + occasional treats. 15% flexible.</div></div></label>
+        <label class="option-item"><input type="radio" name="ob_diet" value="strict"><div class="option-radio"></div><div class="option-body"><div class="option-title">High performance</div><div class="option-desc">Every item earns its place. 5% flexible.</div></div></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="ob-footer">
+    <button class="btn btn-ghost hidden" id="ob-back" style="flex:0.4">Back</button>
+    <button class="btn btn-primary" id="ob-next">Continue</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     API KEY SCREEN
+     ════════════════════════════════════════════════════════════ -->
+<div class="apikey-screen" id="apikey-screen">
+  <div class="apikey-inner">
+    <div style="margin-bottom:var(--s6)">
+      <div class="apikey-free-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Free · No credit card
+      </div>
+      <h1 style="font-size:28px;font-weight:700;letter-spacing:-0.02em;margin-bottom:var(--s2)">Add your free AI key</h1>
+      <p style="font-size:16px;color:var(--label-2);line-height:1.5">Tally uses OpenRouter to identify food — it rotates across free AI vision models automatically. Takes 60 seconds to set up.</p>
+    </div>
+
+    <div class="apikey-steps">
+      <div class="apikey-step">
+        <div class="apikey-step-num">1</div>
+        <div class="apikey-step-text">Go to <a href="https://openrouter.ai/keys" target="_blank">openrouter.ai/keys</a> and sign up free (email only, no credit card)</div>
+      </div>
+      <div class="apikey-step">
+        <div class="apikey-step-num">2</div>
+        <div class="apikey-step-text">Tap <strong>Create Key</strong>, name it anything, copy the key — it starts with <code style="font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px">sk-or-</code></div>
+      </div>
+      <div class="apikey-step">
+        <div class="apikey-step-num">3</div>
+        <div class="apikey-step-text">Paste it below. Stored <strong>only on this device</strong> — never sent anywhere except OpenRouter.</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="apikey-input">OpenRouter API key</label>
+      <input type="text" id="apikey-input" placeholder="sk-or-…" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+    </div>
+    <div id="apikey-error" style="display:none;font-size:14px;color:var(--red);margin-top:var(--s2);padding:var(--s3) var(--s4);background:var(--negative-bg);border-radius:var(--r-sm)"></div>
+
+    <div style="display:flex;gap:var(--s3);margin-top:var(--s5)">
+      <button class="btn btn-ghost" id="apikey-cancel-btn" style="flex:0.4">Cancel</button>
+      <button class="btn btn-primary" id="apikey-save-btn">Save &amp; scan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     APP SHELL
+     ════════════════════════════════════════════════════════════ -->
+<div class="app-shell">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <span class="topbar-title">Tally</span>
+    <div class="topbar-right" id="topbar-meta"></div>
+  </header>
+
+  <!-- Main -->
+  <main class="app-main">
+
+    <!-- ═══ HOME ═══ -->
+    <section class="view" data-view="home">
+      <!-- Balance card -->
+      <div class="balance-card" id="balance-card">
+        <div class="balance-eyebrow">Weekly balance</div>
+        <div class="balance-number" id="ledger-remaining">—</div>
+        <div class="balance-sub">remaining this week</div>
+        <div class="balance-track"><div class="balance-fill" id="ledger-gauge" style="width:0%"></div></div>
+        <div class="balance-footer">
+          <span id="ledger-used">0 kcal used</span>
+          <span id="ledger-budget">— budget</span>
+        </div>
+        <div class="balance-flex-strip">
+          <div>
+            <div class="balance-flex-label">Flexible spend</div>
+            <div class="balance-flex-value" id="flex-remaining">—</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.35);margin-top:1px" id="flex-used"></div>
+          </div>
+          <div style="width:100px">
+            <div class="balance-flex-track"><div class="balance-flex-fill" id="flex-gauge" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scan CTA -->
+      <button class="scan-cta" id="home-scan-btn">
+        <div class="scan-cta-icon">
+          <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+        </div>
+        <div class="scan-cta-text">
+          <div class="t">Scan food</div>
+          <div class="s">Photo or search 4M+ products</div>
+        </div>
+      </button>
+
+      <div id="water-section"></div>
+      <div id="streak-section"></div>
+      <div id="mood-section-wrap"></div>
+      <!-- Habits -->
+      <div id="habits-section"></div>
+
+      <!-- Recent -->
+      <div class="section">
+        <div class="section-header">Recent</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div id="recent-scans"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ═══ SCAN ═══ -->
+    <section class="view" data-view="scan">
+      <div class="viewfinder-wrap">
+        <div class="viewfinder">
+          <div class="vf-corner tl"></div><div class="vf-corner tr"></div>
+          <div class="vf-corner bl"></div><div class="vf-corner br"></div>
+          <div class="vf-placeholder" id="vf-placeholder">
+            <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <p>Tap below to take a photo</p>
+          </div>
+          <img id="vf-image" class="hidden" alt="">
+          <div class="scan-overlay hidden" id="scan-status">
+            <div class="spinner"></div>
+            <span class="scan-overlay-text scan-status-text">Identifying…</span>
+          </div>
+        </div>
+      </div>
+
+      <input type="file" accept="image/*" capture="environment" id="camera-input" style="display:none" aria-label="Take photo">
+
+      <div class="scan-actions">
+        <button class="btn btn-primary" id="take-photo-btn" style="flex:1">
+          <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          Take Photo
+        </button>
+      </div>
+
+      <div class="divider-or">or search by name</div>
+
+      <div class="search-wrap">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="search" id="scan-search-input" placeholder="Snickers, salmon, oatmeal…" inputmode="search" autocorrect="off">
+        </div>
+        <div id="scan-search-results"></div>
+      </div>
+    </section>
+
+    <!-- ═══ RESULTS ═══ -->
+    <section class="view" data-view="results">
+
+      <div id="result-group-progress" style="display:none;padding:var(--s3) var(--s4) 0"></div>
+      <div id="result-items-breakdown" style="display:none;margin-bottom:var(--s4)"></div>
+      <div class="result-hero">
+        <div class="result-label" id="result-eyebrow">Scan result</div>
+        <h1 class="result-name" id="result-food-name">—</h1>
+        <div class="result-meta" id="result-food-meta"></div>
+        <div id="result-verdict-pill"></div>
+        <p class="verdict-headline" id="result-headline"></p>
+        <p class="verdict-summary" id="result-summary"></p>
+      </div>
+
+      <!-- Nutrition -->
+      <div class="section">
+        <div class="section-header">Nutrition · per serving</div>
+        <div class="nutrition-grid" style="margin:0 var(--s4)">
+          <div class="nutrition-cell"><div class="nc-val" id="result-kcal">—</div><div class="nc-label">Cal</div></div>
+          <div class="nutrition-cell"><div class="nc-val" id="result-protein">—</div><div class="nc-label">Protein g</div></div>
+          <div class="nutrition-cell"><div class="nc-val" id="result-carbs">—</div><div class="nc-label">Carbs g</div></div>
+          <div class="nutrition-cell"><div class="nc-val" id="result-fat">—</div><div class="nc-label">Fat g</div></div>
+          <div class="nutrition-cell"><div class="nc-val" id="result-sugar">—</div><div class="nc-label">Sugar g</div></div>
+          <div class="nutrition-cell"><div class="nc-val" id="result-fiber">—</div><div class="nc-label">Fibre g</div></div>
+        </div>
+      </div>
+
+      <!-- Compounds -->
+      <div class="section">
+        <div class="section-header">Compound health effects</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div id="result-compounds"></div>
+        </div>
+      </div>
+
+      <!-- Micronutrients -->
+      <div class="section"><div class="section-header">Micronutrients <span style="font-size:10px;color:var(--label-3);letter-spacing:0;text-transform:none;font-weight:400">estimated</span></div><div id="result-micros" class="micro-grid" style="margin:0 var(--s4)"></div><p class="micro-disclaimer" id="micro-disclaimer" style="padding:var(--s2) var(--s4) 0;font-size:11px;color:var(--label-3)"></p></div>
+      <!-- Effects -->
+      <div class="section" style="padding:0 var(--s4)">
+        <div class="section-header" style="padding:0;margin-bottom:var(--s3)">Effects for your goal</div>
+        <div id="result-positives-wrap" class="effects-section">
+          <div class="effects-header pos">
+            <div class="badge"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+            Positives
+          </div>
+          <div class="effects-list" id="result-positives"></div>
+        </div>
+        <div id="result-negatives-wrap" class="effects-section mt-s4">
+          <div class="effects-header neg">
+            <div class="badge"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+            Negatives
+          </div>
+          <div class="effects-list" id="result-negatives"></div>
+        </div>
+      </div>
+
+      <!-- Weekly allowance -->
+      <div class="section">
+        <div class="section-header">Weekly allowance</div>
+        <div style="margin:0 var(--s4)">
+          <div class="ticket-card">
+            <div class="ticket-number" id="ticket-figure">—</div>
+            <div class="ticket-label" id="ticket-figure-label"></div>
+            <div class="ticket-msg" id="ticket-message"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Burn off -->
+      <div class="section">
+        <div class="section-header">To burn it off</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div id="result-burn"></div>
+        </div>
+      </div>
+
+      <!-- Diet plan -->
+      <div class="section">
+        <div class="section-header">7-day diet plan</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div id="result-diet-plan"></div>
+        </div>
+      </div>
+
+      <!-- Swap -->
+      <div style="padding:var(--s4)" id="result-swap"></div>
+
+      <!-- Actions -->
+      <div class="action-row">
+        <button class="btn btn-ghost" id="result-back-btn">Back</button>
+        <button class="btn btn-primary" id="log-food-btn">Log this</button>
+      </div>
+      <div style="height:var(--s4)"></div>
+
+    </section>
+
+    <!-- ═══ RUN ═══ -->
+    <section class="view" data-view="run">
+      <div id="run-view-content"></div>
+    </section>
+
+    <!-- ═══ PAIRING ═══ -->
+    <section class="view" data-view="pairing" id="v-pairing">
+      <div class="pairing-header">
+        <button class="pairing-back" id="pairing-back-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="pairing-header-text">
+          <div class="pairing-header-title">Multiple items found</div>
+          <div class="pairing-header-sub">Group items together, then name each group</div>
+        </div>
+      </div>
+      <div class="pairing-instructions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span>Tap <strong>Create new group</strong>, then tap items to assign them. Items in one meal go together — drinks are their own group.</span>
+      </div>
+      <div style="padding:0 var(--s4);flex:1;overflow-y:auto">
+        <div id="pairing-content"></div>
+      </div>
+      <div class="pairing-footer">
+        <button class="btn btn-primary" id="pairing-done-btn" disabled>Analyse groups</button>
+      </div>
+    </section>
+
+    <!-- ═══ LOG ═══ -->
+    <section class="view" data-view="log">
+      <div style="padding:var(--s4) 0 var(--s2)">
+        <div class="week-chart" id="week-chart"></div>
+      </div>
+      <div id="log-content"></div>
+    </section>
+
+    <!-- ═══ SETTINGS ═══ -->
+    <section class="view" data-view="settings">
+      <div class="profile-hero">
+        <div class="profile-avatar" id="profile-avatar"></div>
+        <div class="profile-name" id="settings-name">—</div>
+        <div class="profile-goal" id="settings-goal-sub">—</div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <div class="stat-value" id="stat-daily">—</div>
+          <div class="stat-label">Daily target</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-value" id="stat-weekly">—</div>
+          <div class="stat-label">Weekly budget</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-value" id="stat-flex">—</div>
+          <div class="stat-label">Flexible spend</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-value" id="stat-bmr">—</div>
+          <div class="stat-label">BMR</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">Profile</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div class="card-row"><span class="card-row-label">Goal</span><span class="card-row-value" id="settings-goal-label">—</span></div>
+          <div class="card-row"><span class="card-row-label">Pace</span><span class="card-row-value" id="settings-pace-label">—</span></div>
+          <div class="card-row"><span class="card-row-label">Diet style</span><span class="card-row-value" id="settings-diet-label">—</span></div>
+          <div class="card-row"><span class="card-row-label">Activity</span><span class="card-row-value" id="settings-act-label">—</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">AI Scan</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div class="card-row">
+            <div style="flex:1">
+              <div style="font-size:17px;margin-bottom:4px">OpenRouter key</div>
+              <div class="key-status"><div class="key-dot" id="key-dot"></div><span id="apikey-status" style="font-size:13px;color:var(--label-2)">Not set</span></div>
+            </div>
+            <button class="btn btn-ghost" id="change-apikey-btn" style="width:auto;height:34px;padding:0 14px;font-size:14px;border-radius:var(--r-sm);flex:none">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section"><div class="section-header">Theme</div><div class="theme-grid" id="theme-grid"></div><div style="height:var(--s4)"></div></div>
+      <div class="section">
+        <div class="section-header">About</div>
+        <div class="card" style="margin:0 var(--s4)">
+          <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:var(--s2)">
+            <p style="font-size:15px;line-height:1.6;color:var(--label-2)">Tally uses the Mifflin-St Jeor equation for BMR and Compendium of Physical Activities MET values for burn-off estimates. Compound health data is based on established nutritional research.</p>
+          </div>
+          <div class="card-row" style="flex-direction:column;align-items:flex-start;gap:var(--s2)">
+            <p style="font-size:15px;color:var(--label-2)"><strong style="color:var(--label)">Install on iPhone:</strong> Tap Share → Add to Home Screen in Safari.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section" style="padding-bottom:var(--s4)">
+        <div style="padding:0 var(--s4)">
+          <button class="btn btn-destructive btn-full" id="edit-profile-btn">Reset profile &amp; data</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="bottomnav">
+    <button class="nav-btn" data-nav="home" aria-label="Home">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Home
+    </button>
+    <button class="nav-btn scan-btn" data-nav="scan" aria-label="Scan">
+      <div class="scan-bubble">
+        <svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+      </div>
+      Scan
+    </button>
+    <button class="nav-btn" data-nav="log" aria-label="Log">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+      Log
+    </button>
+    <button class="nav-btn" data-nav="run" aria-label="Run">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="1.5"/><path d="M7 21l3-7 3 3 3-10 3 4"/><path d="M6 12l2-4 4 1"/></svg>
+      Run
+    </button>
+    <button class="nav-btn" data-nav="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </button>
+  </nav>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Reset modal -->
+<div class="modal-backdrop" id="confirm-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Reset everything?</div>
+    <div class="modal-body">This will delete your profile and all logged items. You'll go through setup again. This can't be undone.</div>
+    <div class="modal-actions">
+      <button class="btn btn-destructive" id="modal-confirm">Reset</button>
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/features.js"></script>
+<script src="js/calc.js"></script>
+<script src="js/app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
