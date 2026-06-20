@@ -1,15 +1,19 @@
 /* Tally — Service Worker v2
  * Cache-first for app shell; network-only for Gemini + Open Food Facts.
  */
-var CACHE_NAME = 'tally-v2';
+var CACHE_NAME = 'tally-v3';
 var SHELL_ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/data.js',
   './js/calc.js',
+  './js/features.js',
   './js/app.js',
-  './manifest.json'
+  './manifest.json',
+  './icons/icon-180.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', function (e) {
