@@ -10,12 +10,31 @@
   var SK_LOGS    = 'tally_logs_v1';
   var SK_APIKEY  = 'tally_openrouter_key_v1';
 
-  function loadProfile() { try { return JSON.parse(localStorage.getItem(SK_PROFILE)) || null; } catch (_) { return null; } }
-  function saveProfile(p) { localStorage.setItem(SK_PROFILE, JSON.stringify(p)); }
-  function loadLogs()    { try { return JSON.parse(localStorage.getItem(SK_LOGS)) || []; } catch (_) { return []; } }
-  function saveLogs(l)   { localStorage.setItem(SK_LOGS, JSON.stringify(l)); }
-  function loadApiKey()  { try { return localStorage.getItem(SK_APIKEY) || ''; } catch (_) { return ''; } }
-  function saveApiKey(k) { localStorage.setItem(SK_APIKEY, k.trim()); }
+  // Safe storage wrapper — Safari Private Browsing throws QuotaExceededError
+  // on EVERY setItem call (quota is 0), so every write must be guarded or the
+  // whole app crashes the instant someone logs a food item.
+  var _storageWarned = false;
+  function safeSet(key, val) {
+    try { localStorage.setItem(key, val); return true; }
+    catch (e) {
+      if (!_storageWarned) {
+        _storageWarned = true;
+        showToast('Private Browsing blocks saving — your data won\'t persist');
+      }
+      return false;
+    }
+  }
+  function safeGet(key) {
+    try { return localStorage.getItem(key); }
+    catch (_) { return null; }
+  }
+
+  function loadProfile() { try { return JSON.parse(safeGet(SK_PROFILE)) || null; } catch (_) { return null; } }
+  function saveProfile(p) { safeSet(SK_PROFILE, JSON.stringify(p)); }
+  function loadLogs()    { try { return JSON.parse(safeGet(SK_LOGS)) || []; } catch (_) { return []; } }
+  function saveLogs(l)   { safeSet(SK_LOGS, JSON.stringify(l)); }
+  function loadApiKey()  { return safeGet(SK_APIKEY) || ''; }
+  function saveApiKey(k) { safeSet(SK_APIKEY, k.trim()); }
 
   var S = {
     profile:   null,
@@ -223,25 +242,53 @@
 
   function handleImageCapture(file) {
     if (!file) return;
+
+    // File size sanity check — iPhone photos can be 10-30MB; reject absurd
+    // outliers early with a clear message rather than letting canvas ops
+    // silently fail on memory-constrained devices.
+    var MAX_FILE_MB = 50;
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      showScanStatus('Photo is too large (' + Math.round(file.size / 1024 / 1024) + 'MB) — try again');
+      setTimeout(hideScanStatus, 3500);
+      return;
+    }
+
     var img = new Image();
     var obj = URL.createObjectURL(file);
     img.onload = function() {
       URL.revokeObjectURL(obj);
-      var MAX = 1280, w = img.width, h = img.height;
-      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
-      var canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-      scanState.dataUrl = dataUrl;
-      var vf = document.getElementById('vf-image');
-      var ph = document.getElementById('vf-placeholder');
-      if (vf) { vf.src = dataUrl; vf.classList.remove('hidden'); }
-      if (ph) ph.classList.add('hidden');
-      if (!S.apiKey) {
-        showApiKeyScreen(function() { triggerAIScan(dataUrl, 0); });
-      } else {
-        triggerAIScan(dataUrl, 0);
+      try {
+        var MAX = 1280, w = img.width, h = img.height;
+        if (!w || !h) throw new Error('Image has no dimensions');
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas context unavailable');
+        ctx.drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        if (!dataUrl || dataUrl === 'data:,') throw new Error('Canvas export failed');
+
+        scanState.dataUrl = dataUrl;
+        var vf = document.getElementById('vf-image');
+        var ph = document.getElementById('vf-placeholder');
+        if (vf) { vf.src = dataUrl; vf.classList.remove('hidden'); }
+        if (ph) ph.classList.add('hidden');
+
+        if (!navigator.onLine) {
+          showScanStatus('You\'re offline — AI scan needs internet. Use search below.');
+          setTimeout(hideScanStatus, 4500);
+          return;
+        }
+        if (!S.apiKey) {
+          showApiKeyScreen(function() { triggerAIScan(dataUrl, 0); });
+        } else {
+          triggerAIScan(dataUrl, 0);
+        }
+      } catch (procErr) {
+        console.error('Image processing failed:', procErr);
+        showScanStatus('Couldn\'t process that photo — try a different one or use search below.');
+        setTimeout(hideScanStatus, 4000);
       }
     };
     img.onerror = function() {
@@ -275,6 +322,18 @@
     var base64 = dataUrl.split(',')[1];
     var mime   = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
 
+    // fetch() has no built-in timeout — on a weak/hanging connection the
+    // request can stay pending indefinitely, leaving the spinner stuck
+    // forever with no way out short of force-closing the app. 30s is
+    // generous for a vision model response but still bounded.
+    var SCAN_TIMEOUT_MS = 30000;
+    var timedOut = false;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timeoutId = ctrl ? setTimeout(function() {
+      timedOut = true;
+      ctrl.abort();
+    }, SCAN_TIMEOUT_MS) : null;
+
     fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -294,9 +353,11 @@
             { type: 'text',      text: buildMultiPrompt() }
           ]
         }]
-      })
+      }),
+      signal: ctrl ? ctrl.signal : undefined
     })
     .then(function(r) {
+      if (timeoutId) clearTimeout(timeoutId);
       if (!r.ok) return r.json().then(function(b) {
         throw new Error('CODE:' + r.status + ' ' + ((b.error && b.error.message) || ''));
       });
@@ -310,6 +371,21 @@
       handleMultiScanRaw(raw);
     })
     .catch(function(err) {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (timedOut || (err && err.name === 'AbortError')) {
+        // Timeout — try the next free model rather than giving up entirely,
+        // same recovery path as a "model unavailable" response.
+        scanState.scanning = false;
+        if (modelIdx + 1 < FREE_MODELS.length) {
+          triggerAIScan(dataUrl, modelIdx + 1);
+        } else {
+          showScanStatus('Scan timed out — check your connection and try again.');
+          setTimeout(hideScanStatus, 6000);
+        }
+        return;
+      }
+
       var msg = String(err.message || err).toLowerCase();
       if (msg.includes('404') || msg.includes('not found') || msg.includes('unavailable') ||
           msg.includes('paid') || msg.includes('not available for free')) {
@@ -1397,6 +1473,18 @@
   }
 
   /* ─────────────────────────────────────────────────────────────
+     OFFLINE BANNER
+     ───────────────────────────────────────────────────────────── */
+  function showOfflineBanner() {
+    var b = document.getElementById('offline-banner');
+    if (b) b.classList.add('show');
+  }
+  function hideOfflineBanner() {
+    var b = document.getElementById('offline-banner');
+    if (b) b.classList.remove('show');
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      TOAST
      ───────────────────────────────────────────────────────────── */
   var _tt = null;
@@ -1422,6 +1510,18 @@
      WIRE EVENTS
      ───────────────────────────────────────────────────────────── */
   function wire() {
+    // Online/offline awareness — search and AI scan both need a network
+    // connection; tell the user proactively rather than letting every
+    // fetch silently fail one at a time.
+    window.addEventListener('online',  function() {
+      hideOfflineBanner();
+      showToast('Back online');
+    });
+    window.addEventListener('offline', function() {
+      showOfflineBanner();
+    });
+    if (!navigator.onLine) showOfflineBanner();
+
     // Bottom nav
     document.querySelectorAll('.nav-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -1745,6 +1845,15 @@
       return;
     }
 
+    // Offer recovery of a run interrupted by an accidental tab close
+    if (!F.runState.active && !_runRecoveryDismissed) {
+      var recovery = F.getRunRecovery();
+      if (recovery) {
+        renderRunRecoveryPrompt(el, recovery);
+        return;
+      }
+    }
+
     var rs       = F.runState;
     var active   = rs.active;
     var paused   = rs.paused;
@@ -1753,9 +1862,26 @@
     var pace     = F.getPace();
     var cals     = rs.calories || 0;
     var weightKg = S.profile ? S.profile.weightKg : 70;
+    var gpsStatus = rs.gpsStatus;
 
-    var statusText = active ? (paused ? 'Paused' : 'Running') : 'Ready to run';
-    var dotClass   = active ? (paused ? 'paused' : '') : 'idle';
+    // Detect a tracking gap: if the screen was locked/backgrounded and Wake
+    // Lock failed (pre-iOS 18.4 PWA bug, or low battery rejection), GPS fixes
+    // stop arriving entirely. Surface this honestly instead of showing a
+    // confidently "live" UI that's actually frozen.
+    var lastFix = rs.positions.length ? rs.positions[rs.positions.length - 1] : null;
+    var gapMs   = (active && !paused && lastFix) ? (Date.now() - lastFix.ts) : 0;
+    var trackingStale = gapMs > 30000; // no GPS fix in 30+ seconds while "active"
+
+    var statusText = active
+      ? (paused ? 'Paused'
+        : trackingStale ? 'Tracking interrupted'
+        : gpsStatus === 'acquiring' ? 'Finding GPS signal…'
+        : gpsStatus === 'weak-signal' ? 'Weak GPS signal'
+        : 'Running')
+      : 'Ready to run';
+    var dotClass = active
+      ? (paused || trackingStale ? 'paused' : (gpsStatus === 'weak-signal' || gpsStatus === 'acquiring' ? 'paused' : ''))
+      : 'idle';
 
     var controls = '';
     if (!active) {
@@ -1784,14 +1910,37 @@
         '</button>';
     }
 
-    // Route mini-map from positions
     var mapHtml = renderRunMap(rs.positions);
 
+    // Honest, accurate guidance based on real iOS/PWA constraints — not
+    // claiming "background tracking" works, because it genuinely doesn't.
     var tips = !active ? [
-      { icon: '📍', text: 'Allow location access when prompted — GPS improves after about 10 seconds of movement.' },
-      { icon: '🔒', text: 'Keep your screen on or lock it — tracking continues in the background.' },
-      { icon: '🔥', text: 'Calories burned are calculated using your body weight and MET values for running.' },
+      { icon: '📍', text: 'Allow location access when prompted. GPS accuracy improves after about 10–15 seconds of movement.' },
+      { icon: '🔆', text: 'Keep this screen open and unlocked for the whole run — tracking pauses if your phone sleeps or you switch apps.' },
+      { icon: '🎯', text: 'For best accuracy, enable Precise Location for Safari in Settings → Privacy → Location Services.' },
+      { icon: '🔥', text: 'Calories burned are calculated from your body weight and running MET values, and auto-logged when you finish.' },
     ] : [];
+
+    // Weak signal / GPS warning banner
+    var warningHtml = '';
+    if (active && !paused) {
+      if (trackingStale) {
+        warningHtml = '<div class="run-warning">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>' +
+          '<span>No GPS update in over 30 seconds — your screen may have locked. Keep this screen open and unlocked to keep tracking.</span>' +
+          '</div>';
+      } else if (gpsStatus === 'weak-signal') {
+        warningHtml = '<div class="run-warning">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>' +
+          '<span>Weak GPS signal — distance may be inaccurate. Move to an open area or check Precise Location is on.</span>' +
+          '</div>';
+      } else if (gpsStatus === 'acquiring') {
+        warningHtml = '<div class="run-warning info">' +
+          '<div class="spinner" style="border-top-color:var(--accent);width:14px;height:14px"></div>' +
+          '<span>Locating you… distance tracking starts once GPS locks on.</span>' +
+          '</div>';
+      }
+    }
 
     el.innerHTML =
       '<div style="padding:var(--s4) 0 0">' +
@@ -1808,19 +1957,20 @@
           '</div>' +
         '</div>' +
 
+        warningHtml +
+
         '<div class="run-controls" style="margin-top:var(--s4)">' + controls + '</div>' +
 
         mapHtml +
 
         (tips.length ? '<div class="run-tips" style="margin-top:var(--s4)">' +
-          '<div class="run-tips-title">Tips</div>' +
+          '<div class="run-tips-title">Before you start</div>' +
           tips.map(function(t) { return '<div class="run-tip"><span class="run-tip-icon">' + t.icon + '</span><span>' + t.text + '</span></div>'; }).join('') +
           '</div>' : '') +
 
         '<div style="height:var(--s6)"></div>' +
       '</div>';
 
-    // Wire buttons
     var startBtn  = el.querySelector('#run-start-btn');
     var pauseBtn  = el.querySelector('#run-pause-btn');
     var resumeBtn = el.querySelector('#run-resume-btn');
@@ -1828,7 +1978,16 @@
 
     if (startBtn) startBtn.addEventListener('click', function() {
       if (!navigator.geolocation) { showToast('GPS not available on this device'); return; }
-      F.startRun(weightKg);
+      F.startRun(weightKg, {
+        onError: function(type) {
+          if (type === 'denied') {
+            showToast('Location access denied — check Settings → Privacy → Location Services');
+          } else {
+            showToast('GPS unavailable on this device');
+          }
+          renderRunView();
+        }
+      });
       renderRunView();
     });
     if (pauseBtn)  pauseBtn.addEventListener('click',  function() { F.pauseRun();  renderRunView(); });
@@ -1837,7 +1996,6 @@
       var summary = F.stopRun();
       if (summary) {
         _runSummary = summary;
-        // Auto-log calories burned
         if (summary.calories > 0) {
           S.logs.unshift({
             id:        Date.now() + '-run',
@@ -1851,11 +2009,74 @@
             swap:      ''
           });
           saveLogs(S.logs);
+          TallyFeatures.updateStreak();
           recompute();
           renderTopbar();
         }
         renderRunView();
       }
+    });
+  }
+
+  var _runRecoveryDismissed = false;
+
+  function renderRunRecoveryPrompt(el, recovery) {
+    var F = TallyFeatures;
+    var elapsedMs = (recovery.savedAt - recovery.startTime) - recovery.pausedMs;
+    var distKm    = recovery.distanceKm || 0;
+    var ago       = Math.round((Date.now() - recovery.savedAt) / 60000);
+
+    el.innerHTML =
+      '<div style="padding:var(--s4) 0 0">' +
+        '<div class="run-recovery-card">' +
+          '<div class="run-recovery-icon">\u26A0\uFE0F</div>' +
+          '<div class="run-recovery-title">Unfinished run found</div>' +
+          '<div class="run-recovery-sub">It looks like a run was interrupted ' + (ago < 1 ? 'just now' : ago + ' min ago') + ' \u2014 maybe the app was closed accidentally.</div>' +
+          '<div class="run-recovery-stats">' +
+            '<div><strong>' + distKm.toFixed(2) + ' km</strong><span> tracked</span></div>' +
+            '<div><strong>' + F.formatDuration(Math.max(0, elapsedMs)) + '</strong><span> elapsed</span></div>' +
+          '</div>' +
+          '<div class="action-row" style="padding:0;margin-top:var(--s4)">' +
+            '<button class="btn btn-ghost" id="recovery-discard-btn">Discard</button>' +
+            '<button class="btn btn-primary" id="recovery-log-btn">Log it &amp; finish</button>' +
+          '</div>' +
+        '</div>' +
+        '<div style="height:var(--s6)"></div>' +
+      '</div>';
+
+    var discardBtn = el.querySelector('#recovery-discard-btn');
+    var logBtn     = el.querySelector('#recovery-log-btn');
+
+    if (discardBtn) discardBtn.addEventListener('click', function() {
+      TallyFeatures.discardRunRecovery();
+      _runRecoveryDismissed = true;
+      renderRunView();
+    });
+    if (logBtn) logBtn.addEventListener('click', function() {
+      var weightKg = S.profile ? S.profile.weightKg : 70;
+      var mins     = Math.max(0, elapsedMs) / 60000;
+      var cals     = Math.round((8.0 * 3.5 * weightKg / 200) * mins);
+      if (cals > 0) {
+        S.logs.unshift({
+          id:        Date.now() + '-run-recovered',
+          timestamp: Date.now(),
+          foodId:    null,
+          name:      'Run \u2014 ' + distKm.toFixed(2) + ' km (recovered)',
+          brand:     '',
+          serving:   F.formatDuration(Math.max(0, elapsedMs)),
+          kcal:      -cals,
+          verdict:   'positive',
+          swap:      ''
+        });
+        saveLogs(S.logs);
+        TallyFeatures.updateStreak();
+        recompute();
+        renderTopbar();
+        showToast('Recovered run logged');
+      }
+      TallyFeatures.discardRunRecovery();
+      _runRecoveryDismissed = true;
+      renderRunView();
     });
   }
 
