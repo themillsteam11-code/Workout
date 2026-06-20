@@ -99,7 +99,7 @@
   var SK_THEME = 'tally_theme_v1';
 
   function loadTheme() { try { return localStorage.getItem(SK_THEME) || 'system'; } catch(_){ return 'system'; } }
-  function saveTheme(id) { localStorage.setItem(SK_THEME, id); }
+  function saveTheme(id) { try { localStorage.setItem(SK_THEME, id); } catch(_) { /* Private Browsing — theme won't persist this session, but still applies visually */ } }
 
   function applyTheme(id) {
     var theme = THEMES[id] || THEMES.system;
@@ -112,8 +112,12 @@
     Object.keys(theme.vars).forEach(function(k) {
       root.style.setProperty(k, theme.vars[k]);
     });
-    // Dark mode body class
-    document.body.classList.toggle('theme-dark', id === 'dark');
+    // Dark mode class — toggle on BOTH html and body. The pre-paint script
+    // in index.html's <head> sets it on <html> before body exists (to avoid
+    // a flash-of-wrong-theme on cold boot); this call must clean that up too
+    // or switching away from dark would leave a stale class stuck on <html>.
+    document.documentElement.classList.toggle('theme-dark', id === 'dark');
+    if (document.body) document.body.classList.toggle('theme-dark', id === 'dark');
     saveTheme(id);
   }
 
@@ -138,7 +142,8 @@
   }
 
   function saveWaterData(ml) {
-    localStorage.setItem(SK_WATER, JSON.stringify({ date: getTodayKey(), ml: ml }));
+    try { localStorage.setItem(SK_WATER, JSON.stringify({ date: getTodayKey(), ml: ml })); }
+    catch(_) { /* Private Browsing — in-memory only for this session */ }
   }
 
   function getTodayKey() {
@@ -172,7 +177,7 @@
     catch(_) { return { current: 0, best: 0, lastLogDate: null }; }
   }
 
-  function saveStreakData(d) { localStorage.setItem(SK_STREAK, JSON.stringify(d)); }
+  function saveStreakData(d) { try { localStorage.setItem(SK_STREAK, JSON.stringify(d)); } catch(_) {} }
 
   // Call this whenever a food is logged
   function updateStreak() {
@@ -228,7 +233,7 @@
     catch(_) { return []; }
   }
 
-  function saveMoodLog(log) { localStorage.setItem(SK_MOOD, JSON.stringify(log)); }
+  function saveMoodLog(log) { try { localStorage.setItem(SK_MOOD, JSON.stringify(log)); } catch(_) {} }
 
   function logMood(energy, emoji) {
     var log = loadMoodLog();
@@ -326,23 +331,103 @@
      Background: uses Page Visibility API to keep tracking when screen off
      ═══════════════════════════════════════════════════════════════ */
   var runState = {
-    active:     false,
-    paused:     false,
-    startTime:  null,
-    pausedMs:   0,
-    pauseStart: null,
-    positions:  [],     // [{lat, lng, ts, accuracy}]
-    distanceKm: 0,
-    watchId:    null,
+    active:      false,
+    paused:      false,
+    startTime:   null,
+    pausedMs:    0,
+    pauseStart:  null,
+    positions:   [],     // [{lat, lng, ts, accuracy}]
+    distanceKm:  0,
+    watchId:     null,
     timerInterval: null,
-    calories:   0,
+    calories:    0,
+    gpsStatus:   'idle',  // idle | acquiring | active | denied | unavailable | weak-signal
+    wakeLock:    null,
+    _weightKg:   70,
   };
+
+  var SK_RUN_RECOVERY = 'tally_run_recovery_v1';
 
   // MET for running ~8 km/h
   var RUN_MET = 8.0;
 
-  function startRun(weightKg) {
+  // Persist run state every position update so an accidental tab-close
+  // (swiping the app away, accidental back-gesture) doesn't silently lose
+  // an in-progress run. On next app load we can detect and recover it.
+  function persistRunRecovery() {
+    try {
+      localStorage.setItem(SK_RUN_RECOVERY, JSON.stringify({
+        startTime:  runState.startTime,
+        pausedMs:   runState.pausedMs,
+        positions:  runState.positions,
+        distanceKm: runState.distanceKm,
+        weightKg:   runState._weightKg,
+        savedAt:    Date.now()
+      }));
+    } catch (_) { /* private browsing — recovery unavailable, run still works this session */ }
+  }
+
+  function clearRunRecovery() {
+    try { localStorage.removeItem(SK_RUN_RECOVERY); } catch (_) {}
+  }
+
+  function getRunRecovery() {
+    try {
+      var raw = localStorage.getItem(SK_RUN_RECOVERY);
+      if (!raw) return null;
+      var data = JSON.parse(raw);
+      // Only offer recovery if saved within the last 3 hours — older than that
+      // is almost certainly a stale/abandoned run, not a real crash.
+      if (Date.now() - data.savedAt > 3 * 60 * 60 * 1000) { clearRunRecovery(); return null; }
+      return data;
+    } catch (_) { return null; }
+  }
+
+  // Request the Screen Wake Lock so the screen doesn't sleep mid-run and kill
+  // GPS updates. Confirmed via testing: iOS Safari 16.4+ supports this for
+  // installed PWAs as of iOS 18.4 (earlier versions had a WebKit bug). Always
+  // wrapped in try/catch — low battery or user settings can reject silently.
+  function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return Promise.resolve(null);
+    return navigator.wakeLock.request('screen').then(function(lock) {
+      runState.wakeLock = lock;
+      lock.addEventListener('release', function() { runState.wakeLock = null; });
+      return lock;
+    }).catch(function() {
+      runState.wakeLock = null;
+      return null;
+    });
+  }
+
+  function releaseWakeLock() {
+    if (runState.wakeLock) {
+      try { runState.wakeLock.release(); } catch (_) {}
+      runState.wakeLock = null;
+    }
+  }
+
+  // Re-acquire wake lock when tab becomes visible again (iOS releases it
+  // automatically when the app is backgrounded — this restores it the moment
+  // the user comes back, matching documented Wake Lock API behavior).
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible' && runState.active && !runState.paused) {
+        requestWakeLock();
+      }
+    });
+  }
+
+  function startRun(weightKg, callbacks) {
     if (runState.active) return;
+    callbacks = callbacks || {};
+
+    if (!navigator.geolocation) {
+      runState.gpsStatus = 'unavailable';
+      if (callbacks.onError) callbacks.onError('unavailable');
+      return;
+    }
+
+    runState.gpsStatus  = 'acquiring';
     runState.active     = true;
     runState.paused     = false;
     runState.startTime  = Date.now();
@@ -353,32 +438,64 @@
     runState.calories   = 0;
     runState._weightKg  = weightKg || 70;
 
-    // Start GPS watch
-    if (navigator.geolocation) {
-      runState.watchId = navigator.geolocation.watchPosition(
-        function(pos) {
-          if (runState.paused) return;
-          var p = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: pos.timestamp, acc: pos.coords.accuracy };
-          // Only accept positions with accuracy < 50m
-          if (p.acc > 50) return;
-          var last = runState.positions[runState.positions.length - 1];
-          if (last) {
-            var d = haversineKm(last.lat, last.lng, p.lat, p.lng);
-            // Filter GPS noise: ignore jumps > 0.05km in < 2 seconds
-            var dt = (p.ts - last.ts) / 1000;
-            if (dt > 0 && d / dt < 0.014) { // ~50 km/h max
-              runState.distanceKm += d;
-            }
-          }
-          runState.positions.push(p);
-          if (typeof onRunUpdate === 'function') onRunUpdate();
-        },
-        function(err) { console.warn('GPS error:', err.message); },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
-      );
-    }
+    requestWakeLock();
 
-    // Update timer every second
+    runState.watchId = navigator.geolocation.watchPosition(
+      function(pos) {
+        if (runState.paused) return;
+        var acc = pos.coords.accuracy;
+        var p = { lat: pos.coords.latitude, lng: pos.coords.longitude, ts: pos.timestamp, acc: acc };
+
+        // First good fix — flip status from "acquiring" to "active"
+        if (runState.gpsStatus === 'acquiring') runState.gpsStatus = 'active';
+
+        // iOS reports 3000-9000m accuracy when Precise Location is OFF for
+        // this app — flag it so the UI can tell the user to enable it,
+        // rather than silently producing a flat, useless route.
+        if (acc > 500) {
+          runState.gpsStatus = 'weak-signal';
+        } else if (runState.gpsStatus === 'weak-signal' && acc <= 100) {
+          runState.gpsStatus = 'active';
+        }
+
+        // Reject genuinely unusable fixes outright (don't add to distance/route)
+        if (acc > 1000) {
+          if (typeof onRunUpdate === 'function') onRunUpdate();
+          return;
+        }
+
+        var last = runState.positions[runState.positions.length - 1];
+        if (last) {
+          var d  = haversineKm(last.lat, last.lng, p.lat, p.lng);
+          var dt = (p.ts - last.ts) / 1000;
+          // Filter GPS noise: ignore implied speeds over ~50 km/h (faster than
+          // any run — almost certainly a GPS jump, not real movement)
+          if (dt > 0 && d / dt < 0.014) {
+            runState.distanceKm += d;
+          }
+        }
+        runState.positions.push(p);
+        persistRunRecovery();
+        if (typeof onRunUpdate === 'function') onRunUpdate();
+      },
+      function(err) {
+        // PERMISSION_DENIED = 1, POSITION_UNAVAILABLE = 2, TIMEOUT = 3
+        if (err.code === 1) {
+          runState.gpsStatus = 'denied';
+          runState.active = false;
+          clearInterval(runState.timerInterval);
+          releaseWakeLock();
+          if (callbacks.onError) callbacks.onError('denied');
+        } else {
+          // Transient errors (timeout, temporarily unavailable) — keep the
+          // run going, GPS often recovers on the next fix.
+          runState.gpsStatus = 'weak-signal';
+        }
+        if (typeof onRunUpdate === 'function') onRunUpdate();
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 2000 }
+    );
+
     runState.timerInterval = setInterval(function() {
       if (!runState.paused) {
         runState.calories = calcRunCalories(runState._weightKg, getRunDurationMs() / 60000);
@@ -391,6 +508,7 @@
     if (!runState.active || runState.paused) return;
     runState.paused     = true;
     runState.pauseStart = Date.now();
+    releaseWakeLock();
   }
 
   function resumeRun() {
@@ -398,6 +516,7 @@
     if (runState.pauseStart) runState.pausedMs += Date.now() - runState.pauseStart;
     runState.paused     = false;
     runState.pauseStart = null;
+    requestWakeLock();
   }
 
   function stopRun() {
@@ -406,6 +525,8 @@
     if (runState.watchId !== null && navigator.geolocation) {
       navigator.geolocation.clearWatch(runState.watchId);
     }
+    releaseWakeLock();
+    clearRunRecovery();
     var summary = {
       distanceKm: Math.round(runState.distanceKm * 100) / 100,
       durationMs: getRunDurationMs(),
@@ -413,8 +534,15 @@
       paceMinKm:  getPace(),
       positions:  runState.positions.slice(),
     };
-    runState.active = false;
+    runState.active   = false;
+    runState.watchId  = null;
+    runState.gpsStatus = 'idle';
     return summary;
+  }
+
+  // Discard a recovered run without logging it (user choice on the recovery prompt)
+  function discardRunRecovery() {
+    clearRunRecovery();
   }
 
   function getRunDurationMs() {
@@ -511,6 +639,10 @@
     formatPace:    formatPace,
     setRunUpdateCallback: setRunUpdateCallback,
     haversineKm:   haversineKm,
+    getRunRecovery:    getRunRecovery,
+    discardRunRecovery: discardRunRecovery,
+    requestWakeLock:   requestWakeLock,
+    releaseWakeLock:   releaseWakeLock,
   };
 
 })(window);
