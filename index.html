@@ -15,6 +15,29 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<script>
+/* Apply saved theme BEFORE first paint to avoid a flash of the wrong theme
+   on cold boot. This is a minimal, synchronous duplicate of the theme vars
+   in js/features.js — kept in sync manually since it must run before any
+   other script loads. Wrapped in try/catch for Private Browsing safety. */
+(function() {
+  try {
+    var id = localStorage.getItem('tally_theme_v1') || 'system';
+    if (id === 'system') return;
+    var THEMES = {
+      dark: {'--bg':'#000000','--bg-elevated':'#1C1C1E','--bg-grouped':'#000000','--separator':'rgba(255,255,255,0.10)','--separator-opaque':'#38383A','--label':'#FFFFFF','--label-2':'rgba(235,235,245,0.60)','--label-3':'rgba(235,235,245,0.30)','--label-4':'rgba(235,235,245,0.15)','--accent':'#0A84FF','--positive':'#30D158','--positive-bg':'rgba(48,209,88,0.15)','--negative':'#FF453A','--negative-bg':'rgba(255,69,58,0.15)','--warning':'#FF9F0A','--warning-bg':'rgba(255,159,10,0.15)','--neutral-bg':'#2C2C2E','--neutral':'#636366'},
+      forest: {'--bg':'#F0F4F0','--bg-elevated':'#FFFFFF','--accent':'#2D6A4F','--accent-light':'rgba(45,106,79,0.12)','--positive':'#2D6A4F','--positive-bg':'#D8F3DC','--negative':'#B5251A','--negative-bg':'#FFE5E3','--warning':'#D4A017','--warning-bg':'#FFF3C4','--neutral':'#74796D','--neutral-bg':'#EAEDEA','--separator':'rgba(45,74,45,0.10)','--separator-opaque':'#C8D4C8'},
+      sunset: {'--bg':'#FFF8F3','--bg-elevated':'#FFFFFF','--accent':'#E8671A','--accent-light':'rgba(232,103,26,0.10)','--positive':'#2D9E5A','--positive-bg':'#E0F5EA','--negative':'#CC2936','--negative-bg':'#FEEAEB','--warning':'#E8671A','--warning-bg':'#FEF0E6','--neutral':'#8A7060','--neutral-bg':'#F5EDE5','--separator':'rgba(100,50,10,0.10)','--separator-opaque':'#DDD0C4'},
+      ocean: {'--bg':'#F0F7FF','--bg-elevated':'#FFFFFF','--accent':'#0066CC','--accent-light':'rgba(0,102,204,0.10)','--positive':'#007755','--positive-bg':'#D9F2EB','--negative':'#CC2000','--negative-bg':'#FFE8E3','--warning':'#CC7700','--warning-bg':'#FFF3D6','--neutral':'#5577AA','--neutral-bg':'#E5EEF9','--separator':'rgba(0,60,130,0.10)','--separator-opaque':'#C4D8F0'}
+    };
+    var vars = THEMES[id];
+    if (!vars) return;
+    var root = document.documentElement;
+    for (var k in vars) root.style.setProperty(k, vars[k]);
+    if (id === 'dark') document.documentElement.classList.add('theme-dark');
+  } catch (e) { /* private browsing or storage unavailable — default theme is fine */ }
+})();
+</script>
 </head>
 <body>
 
@@ -206,6 +229,12 @@
     <span class="topbar-title">Tally</span>
     <div class="topbar-right" id="topbar-meta"></div>
   </header>
+
+  <!-- Offline banner -->
+  <div class="offline-banner" id="offline-banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0119 12.55"/><path d="M5 12.55a10.94 10.94 0 015.17-2.39"/><path d="M10.71 5.05A16 16 0 0122.58 9"/><path d="M1.42 9a15.91 15.91 0 014.7-2.88"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+    <span>No internet — scan &amp; search need a connection. Your saved data still works.</span>
+  </div>
 
   <!-- Main -->
   <main class="app-main">
