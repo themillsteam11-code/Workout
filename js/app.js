@@ -1729,7 +1729,7 @@
     var energyDots = '';
     for (var i = 1; i <= 5; i++) {
       var cls = i <= _moodState.energy ? (i >= 4 ? ' lit high' : ' lit') : '';
-      energyDots += '<button class="mood-energy-dot' + cls + '" data-level="' + i + '" aria-label="Energy ' + i + '"></button>';
+      energyDots += '<button class="mood-energy-dot' + cls + '" data-level="' + i + '" aria-label="Energy level ' + i + ' of 5"><span class="mood-energy-num">' + i + '</span></button>';
     }
 
     moodEl.innerHTML =
