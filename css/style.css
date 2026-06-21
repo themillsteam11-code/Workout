@@ -883,15 +883,16 @@ input, select, textarea { font-size: 16px !important; }
    MULTI-SCAN PAIRING SCREEN
    ================================================================ */
 
-/* Pairing view layout */
-[data-view="pairing"] {
-  display: none;
-  flex-direction: column;
-  height: calc(100vh - var(--topbar-h) - var(--nav-h));
-  overflow: hidden;
-}
+/* Pairing view layout — flows naturally inside .app-main's scroll
+   container exactly like every other tab, instead of the previous
+   100vh-based fixed height. 100vh on iOS Safari is calculated from the
+   largest possible viewport (chrome collapsed), not the currently visible
+   one, so it changes value as Safari's UI chrome shows/hides — this was
+   the root cause of the bottom nav visibly shifting when switching to
+   this tab. Standard block flow has no such problem. */
+[data-view="pairing"] { display: none; }
 [data-view="pairing"].active {
-  display: flex;
+  display: block;
   animation: fadeUp 220ms cubic-bezier(0.25,0.46,0.45,0.94) both;
 }
 
@@ -899,10 +900,9 @@ input, select, textarea { font-size: 16px !important; }
   display: flex; align-items: center; gap: var(--s3);
   padding: var(--s4) var(--s4) var(--s2);
   border-bottom: 0.5px solid var(--separator);
-  flex-shrink: 0;
 }
 .pairing-back {
-  width: 34px; height: 34px; border-radius: 50%;
+  width: 44px; height: 44px; border-radius: 50%;
   background: var(--bg); border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; -webkit-tap-highlight-color: transparent;
@@ -916,7 +916,6 @@ input, select, textarea { font-size: 16px !important; }
   margin: var(--s3) var(--s4);
   background: rgba(0,122,255,0.08); border-radius: var(--r-sm);
   padding: var(--s3) var(--s4);
-  flex-shrink: 0;
 }
 .pairing-instructions svg {
   width: 16px; height: 16px; stroke: var(--accent);
@@ -925,9 +924,10 @@ input, select, textarea { font-size: 16px !important; }
 .pairing-instructions span { font-size: 13px; color: var(--label); line-height: 1.5; }
 
 .pairing-footer {
+  position: sticky; bottom: 0; z-index: 5;
   padding: var(--s3) var(--s4) max(var(--s4), env(safe-area-inset-bottom));
   border-top: 0.5px solid var(--separator);
-  background: var(--bg); flex-shrink: 0;
+  background: var(--bg);
 }
 .pairing-footer .btn { border-radius: var(--r-md); height: 50px; width: 100%; font-size: 17px; font-weight: 600; }
 
@@ -997,12 +997,20 @@ input, select, textarea { font-size: 16px !important; }
   border: 0.5px solid var(--separator-opaque);
 }
 .pairing-chip-remove {
-  width: 16px; height: 16px; border-radius: 50%;
+  width: 18px; height: 18px; border-radius: 50%;
   background: var(--label-3); color: white; border: none;
   font-size: 11px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent; flex-shrink: 0;
-  font-weight: 700;
+  font-weight: 700; position: relative;
+}
+/* Visual size stays small (18px) to fit inline with chip text, but the
+   actual tappable hit zone is invisibly expanded to 44px via this
+   pseudo-element, matching iOS HIG without changing the chip's look. */
+.pairing-chip-remove::before {
+  content: ''; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 44px; height: 44px;
 }
 
 /* Add group button */
@@ -1099,14 +1107,14 @@ html.theme-dark .ob-footer, body.theme-dark .ob-footer { background: #000; borde
   transition: width 300ms cubic-bezier(0.4,0,0.2,1);
 }
 .water-glasses {
-  display: flex; gap: var(--s2); flex-wrap: wrap;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--s2);
+  justify-items: center;
 }
 .water-glass {
-  width: 34px; height: 34px; border-radius: var(--r-sm);
+  width: 100%; max-width: 44px; height: 44px; border-radius: var(--r-sm);
   background: var(--neutral-bg); border: none; cursor: pointer;
   font-size: 18px; display: flex; align-items: center; justify-content: center;
   -webkit-tap-highlight-color: transparent; transition: background 150ms, transform 100ms;
-  flex-shrink: 0;
 }
 .water-glass.filled { background: rgba(0,136,204,0.12); }
 .water-glass:active { transform: scale(0.92); }
@@ -1173,13 +1181,23 @@ html.theme-dark .ob-footer, body.theme-dark .ob-footer { background: #000; borde
 .mood-emoji-btn.selected { border-color: var(--accent); background: var(--accent-light); transform: scale(1.15); }
 .mood-emoji-btn:active { transform: scale(0.92); }
 .mood-energy-label { font-size: 12px; color: var(--label-2); margin-bottom: var(--s2); font-weight: 500; }
+/* 44px minimum tap target per Apple HIG — the previous 8px-tall sliver
+   buttons were nearly impossible to tap accurately on a real iPhone,
+   which is why energy selection silently failed and the Save button
+   stayed greyed out even though the underlying logic was correct. */
 .mood-energy-row { display: flex; gap: var(--s2); margin-bottom: var(--s4); }
 .mood-energy-dot {
-  flex: 1; height: 8px; border-radius: 4px; background: var(--neutral-bg);
-  border: none; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: all 150ms;
+  flex: 1; height: 44px; border-radius: var(--r-sm); background: var(--neutral-bg);
+  border: 1.5px solid transparent; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: all 150ms;
+  display: flex; align-items: center; justify-content: center;
 }
-.mood-energy-dot.lit { background: var(--warning); }
-.mood-energy-dot.lit.high { background: var(--positive); }
+.mood-energy-num { font-size: 15px; font-weight: 600; color: var(--label-2); transition: color 150ms; }
+.mood-energy-dot.lit { background: rgba(255,159,10,0.15); border-color: var(--warning); }
+.mood-energy-dot.lit .mood-energy-num { color: var(--warning); }
+.mood-energy-dot.lit.high { background: rgba(48,209,88,0.15); border-color: var(--positive); }
+.mood-energy-dot.lit.high .mood-energy-num { color: var(--positive); }
+.mood-energy-dot:active { transform: scale(0.95); }
 .mood-submit-btn {
   width: 100%; height: 42px; border-radius: var(--r-sm); border: none;
   background: var(--accent); color: white; font-size: 15px; font-weight: 600;
